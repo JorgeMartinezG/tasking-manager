@@ -1,49 +1,67 @@
 # To use this file, run `docker-compose up`.
-version: '3'
+version: "3.4"
+
+x-api-config: &api
+  build:
+    context: "./scripts/docker"
+    dockerfile: "Dockerfile.api"
+  env_file: ${ENV_FILE:-tasking-manager.env}
+  depends_on:
+    - postgresql
+  links:
+    - postgresql
+  networks:
+    - web
 
 services:
   # Main application
-  app:
-    image: hotosm/tasking-manager
-    container_name: app
-    env_file: tasking-manager.env
-    environment:
-      - POSTGRES_ENDPOINT=postgresql
-    depends_on:
-      - postgresql
-    expose:
-      - "5000"
-    ports:
-      - "5000:5000"
-    links:
-      - postgresql
-    volumes:
-      - node_modules:/usr/src/app/frontend/node_modules
+  api:
+    <<: *api
+    container_name: api
+    labels:
+      - traefik.http.routers.api.rule=Host(`localhost`)
+      - traefik.http.routers.api.rule=PathPrefix(`/api/`)
+      - traefik.http.services.api.loadbalancer.server.port=5000
 
-  # Migration service
   migration:
-    image: hotosm/tasking-manager
-    env_file: tasking-manager.env
+    <<: *api
+    container_name: migration
     restart: on-failure
-    environment:
-      - POSTGRES_ENDPOINT=postgresql
-    depends_on:
-      - postgresql
-    links:
-      - postgresql
     command: python manage.py db upgrade
 
-  # Database
+  app:
+    stdin_open: true
+    build:
+      context: "."
+      dockerfile: "./scripts/docker/Dockerfile.app"
+      args:
+        - TM_APP_API_URL=http://localhost/api
+    networks:
+      - web
+    labels:
+      - traefik.http.routers.app.rule=Host(`localhost`)
+      - traefik.http.services.app.loadbalancer.server.port=80
+
   postgresql:
     image: mdillon/postgis:11
     container_name: postgresql
-    env_file: tasking-manager.env
-    # logging:
-    #   driver: none
-    ports:
-      - "5433:5432"
-    expose:
-      - "5432"
+    env_file: ${ENV_FILE:-tasking-manager.env}
+    networks:
+      - web
 
-volumes:
-  node_modules:
+  traefik:
+    image: traefik
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - --entrypoints.web.address=:80
+      - --providers.docker=true
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
