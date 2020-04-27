@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import { viewport } from '@mapbox/geo-viewport';
 import { FormattedMessage } from 'react-intl';
@@ -71,16 +71,19 @@ export const TaskHistory = ({ projectId, taskId, commentPayload }) => {
     }
   }, [commentPayload]);
 
-  useEffect(() => {
-    const getTaskInfo = async () => {
-      const res = await fetchLocalJSONAPI(`projects/${projectId}/tasks/${taskId}/`, token);
-      setHistory(res.taskHistory);
-    };
+  const getTaskInfo = useCallback(
+    (projectId, taskId, token) =>
+      fetchLocalJSONAPI(`projects/${projectId}/tasks/${taskId}/`, token).then((res) =>
+        setHistory(res.taskHistory),
+      ),
+    [],
+  );
 
-    if (!commentPayload && projectId && taskId) {
-      getTaskInfo();
+  useEffect(() => {
+    if (commentPayload === undefined && projectId && taskId && token) {
+      getTaskInfo(projectId, taskId, token);
     }
-  }, [projectId, taskId, token, commentPayload]);
+  }, [projectId, taskId, token, commentPayload, getTaskInfo]);
 
   const getTaskActionMessage = (action, actionText) => {
     let message = '';
