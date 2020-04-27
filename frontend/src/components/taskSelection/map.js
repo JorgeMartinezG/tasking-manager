@@ -118,20 +118,16 @@ export const TasksMap = ({
           map.scrollZoom.enable();
         }
 
-        const lockedByUser = ['==', ['get', 'lockedBy'], authDetails.id];
         const locked = [
           'any',
           ['==', ['to-string', ['get', 'taskStatus']], 'LOCKED_FOR_MAPPING'],
           ['==', ['to-string', ['get', 'taskStatus']], 'LOCKED_FOR_VALIDATION'],
         ];
-        const taskStatusCondition = [
-          'case',
-          ['all', locked, lockedByUser],
-          'redlock',
-          locked,
-          'lock',
-          '',
-        ];
+        let all_condition = ['all', locked];
+        if (authDetails.id !== undefined) {
+          all_condition.push(['==', ['get', 'lockedBy'], authDetails.id]);
+        }
+        const taskStatusCondition = ['case', all_condition, 'redlock', locked, 'lock', ''];
 
         map.addLayer({
           id: 'tasks-icon',
